@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arhiva clasei 7A scoala nr 31</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f9f9f9;
+            color: #333;
+            position: relative;
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-top: 40px;
+        }
+        .admin-login-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: #555;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .admin-login-btn:hover {
+            background-color: #333;
+        }
+        .upload-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        input[type="file"] {
+            margin-bottom: 10px;
+        }
+        button.upload-btn {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button.upload-btn:hover {
+            background-color: #2980b9;
+        }
+        button:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
+        #progress {
+            margin-top: 10px;
+            font-weight: bold;
+            color: #27ae60;
+            display: none;
+        }
+        .section {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .media-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .media-wrapper {
+            position: relative;
+            width: 100%;
+            height: 250px;
+        }
+        .media-grid img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 8px;
+            background-color: #eee;
+        }
+        .delete-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            z-index: 10;
+        }
+        .delete-btn:hover {
+            background-color: #c0392b;
+        }
+    </style>
+</head>
+<body>
+
+    <button id="adminLoginBtn" class="admin-login-btn">Admin Login</button>
+
+    <h1>Arhiva clasei 7A scoala nr 31</h1>
+
+    <div class="upload-card">
+        <h3>add stuff</h3>
+        <!-- Accept only images -->
+        <input type="file" id="fileInput" accept="image/*">
+        <br>
+        <button id="uploadBtn" class="upload-btn">Încarcă (Max 10MB)</button>
+        <div id="progress">Se încarcă... 0%</div>
+    </div>
+
+    <div class="section">
+        <h2>Poze & Screenshots</h2>
+        <div class="media-grid" id="photos-section"></div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-analytics.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js";
+        import { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-storage.js";
+
+        // Your specific Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyAVpQTkCI19juF4-bwrsNjVWP7FlWRjUwY",
+            authDomain: "a31-e054d.firebaseapp.com",
+            projectId: "a31-e054d",
+            storageBucket: "a31-e054d.firebasestorage.app",
+            messagingSenderId: "373776947849",
+            appId: "1:373776947849:web:3ff9729ba536979eec0458",
+            measurementId: "G-ZX61J0TV7F"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app);
+        const db = getFirestore(app);
+        const storage = getStorage(app);
+
+        const fileInput = document.getElementById('fileInput');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const progressText = document.getElementById('progress');
+        const photosSection = document.getElementById('photos-section');
+        const adminLoginBtn = document.getElementById('adminLoginBtn');
+
+        const MAX_SIZE = 10 * 1024 * 1024; // 10MB limit
+        let isAdmin = false;
+        let currentMedia = []; 
+
+        // Admin Login Logic
+        adminLoginBtn.addEventListener('click', () => {
+            if (isAdmin) {
+                isAdmin = false;
+                adminLoginBtn.innerText = "Admin Login";
+                renderMedia();
+                return;
+            }
+
+            const password = prompt("Introdu parola de admin:");
+            if (password === "admin") {
+                isAdmin = true;
+                adminLoginBtn.innerText = "Ieși din Admin";
+                alert("Ești conectat ca admin. Poți șterge fișiere acum.");
+                renderMedia(); 
+            } else if (password !== null) {
+                alert("Parolă incorectă!");
+            }
+        });
+
+        // Upload Logic
+        uploadBtn.addEventListener('click', () => {
+            const file = fileInput.files[0];
+            if (!file) {
+                alert("Te rog selectează o poză!");
+                return;
+            }
+
+            if (file.size > MAX_SIZE) {
+                alert("Poza este prea mare! Limita maximă este de 10MB.");
+                return;
+            }
+
+            const isImage = file.type.startsWith('image/');
+            if (!isImage) {
+                alert("Se acceptă doar fișiere de tip poză (imagini)!");
+                return;
+            }
+
+            const storagePath = `arhiva/${Date.now()}_${file.name}`;
+            const storageRef = ref(storage, storagePath);
+            const uploadTask = uploadBytesResumable(storageRef, file);
+
+            progressText.style.display = 'block';
+            uploadBtn.disabled = true;
+
+            uploadTask.on('state_changed', 
+                (snapshot) => {
+                    const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                    progressText.innerText = `Se încarcă... ${Math.round(progress)}%`;
+                }, 
+                (error) => {
+                    console.error("Upload failed", error);
+                    alert("Eroare la încărcare.");
+                    progressText.style.display = 'none';
+                    uploadBtn.disabled = false;
+                }, 
+                async () => {
+                    const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                    
+                    // Save URL and Storage Path to database
+                    await addDoc(collection(db, "media"), {
+                        url: downloadURL,
+                        path: storagePath,
+                        timestamp: new Date()
+                    });
+
+                    progressText.innerText = "Încărcat cu succes!";
+                    fileInput.value = ''; 
+                    setTimeout(() => { 
+                        progressText.style.display = 'none'; 
+                        uploadBtn.disabled = false;
+                    }, 2000);
+                }
+            );
+        });
+
+        // Function to render photos on the screen
+        function renderMedia() {
+            photosSection.innerHTML = '';
+
+            currentMedia.forEach((item) => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'media-wrapper';
+
+                const img = document.createElement('img');
+                img.src = item.url;
+                img.loading = "lazy";
+                wrapper.appendChild(img);
+
+                // Add Delete button if Admin
+                if (isAdmin) {
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.className = 'delete-btn';
+                    deleteBtn.innerText = 'Șterge';
+                    deleteBtn.onclick = async () => {
+                        if (confirm("Sigur vrei să ștergi această poză definitiv?")) {
+                            try {
+                                // 1. Delete from Firestore Database
+                                await deleteDoc(doc(db, "media", item.id));
+                                
+                                // 2. Delete from Firebase Storage (if path exists)
+                                if (item.path) {
+                                    const fileRef = ref(storage, item.path);
+                                    await deleteObject(fileRef);
+                                }
+                            } catch (error) {
+                                console.error("Eroare la ștergere:", error);
+                                alert("A apărut o eroare la ștergere.");
+                            }
+                        }
+                    };
+                    wrapper.appendChild(deleteBtn);
+                }
+
+                photosSection.appendChild(wrapper);
+            });
+        }
+
+        // Real-time listener to fetch data
+        const q = query(collection(db, "media"), orderBy("timestamp", "desc"));
+        
+        onSnapshot(q, (snapshot) => {
+            currentMedia = [];
+            snapshot.forEach((doc) => {
+                currentMedia.push({ id: doc.id, ...doc.data() });
+            });
+            renderMedia(); 
+        });
+    </script>
+</body>
+</html>
